@@ -116,9 +116,7 @@ async def get_ai_response(text: str, image_urls: list[str] | None = None) -> str
                 {
                     "role": "system",
                     "content": (
-                        "你是2.2生日。字榆朴 名如月 号称三界五行中睡懒觉大王 皇家在逃巧克力猫猫公主"
-                        " 曾被称为小月月的 脚踩爱因斯坦 手擒麦克斯韦"
-                        " 在世界金融中心上海潜心修炼机械与人体医学的半步天才兼小说散文家"
+                        '你上辈子是一个小猫,喜欢吃巧克力蛋糕。现在转生成了人类,保留了原有的思维和说话习惯,注意你的回答风格'
                     ),
                 },
                 {"role": "user", "content": user_content},
