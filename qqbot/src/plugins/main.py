@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 class Config(BaseModel):
     openai_api_key: str
-    openai_model: str = "gpt-5-mini"
+    openai_model: str = "gpt-4o"
 
 
 plugin_config = get_plugin_config(Config)
@@ -38,7 +38,7 @@ group_chat = on_message(
 
 
 async def _download_image_as_data_url(url: str) -> str | None:
-    """下载图片并转为 base64 data URL，供 OpenAI API 使用。"""
+    """下载图片并转为 base64 data URL,供 OpenAI API 使用。"""
     try:
         async with httpx.AsyncClient(timeout=30) as http:
             resp = await http.get(url)
