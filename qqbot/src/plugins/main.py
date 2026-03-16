@@ -1,3 +1,6 @@
+import base64
+
+import httpx
 from nonebot import get_plugin_config, logger, on_message
 from nonebot.adapters.onebot.v11 import (
     GroupMessageEvent,
@@ -11,10 +14,11 @@ from pydantic import BaseModel
 
 class Config(BaseModel):
     openai_api_key: str
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "gpt-5-mini"
 
 
 plugin_config = get_plugin_config(Config)
+logger.info(f"Plugin loaded — using model: {plugin_config.openai_model}")
 
 client = AsyncOpenAI(api_key=plugin_config.openai_api_key)
 
@@ -33,6 +37,20 @@ group_chat = on_message(
 )
 
 
+async def _download_image_as_data_url(url: str) -> str | None:
+    """下载图片并转为 base64 data URL，供 OpenAI API 使用。"""
+    try:
+        async with httpx.AsyncClient(timeout=30) as http:
+            resp = await http.get(url)
+            resp.raise_for_status()
+            mime = resp.headers.get("content-type", "image/jpeg")
+            b64 = base64.b64encode(resp.content).decode()
+            return f"data:{mime};base64,{b64}"
+    except Exception:  # noqa: BLE001
+        logger.exception(f"Failed to download image: {url}")
+        return None
+
+
 def _extract_content(message: Message) -> tuple[str, list[str]]:
     """从消息中提取纯文本和图片 URL 列表。"""
     text = message.extract_plain_text().strip()
@@ -48,10 +66,18 @@ async def get_ai_response(text: str, image_urls: list[str] | None = None) -> str
     """调用 OpenAI API 获取回复，支持纯文本与图文混合输入。"""
     try:
         if image_urls:
-            # 构建多模态消息（文字 + 图片）
+            # 下载图片并转为 base64（QQ CDN URL 外部不可访问）
+            data_urls = [
+                data_url
+                for url in image_urls
+                if (data_url := await _download_image_as_data_url(url))
+            ]
+            if not data_urls and not text:
+                return "图片下载失败了，请重新发送试试。"
+
             content: list[dict] = [
-                {"type": "text", "text": text or "请描述这张图片"},
-                *[{"type": "image_url", "image_url": {"url": url}} for url in image_urls],
+                {"type": "text", "text": text or "看看这张图片，给出你的看法"},
+                *[{"type": "image_url", "image_url": {"url": u}} for u in data_urls],
             ]
             user_content: list[dict] | str = content
         else:
