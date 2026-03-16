@@ -7,6 +7,7 @@ requires-python = ">=3.10, <4.0"
 dependencies = [
     "nonebot2[fastapi]>=2.4.4",
     "nonebot-adapter-onebot>=2.4.6",
+    "openai>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -17,6 +18,7 @@ dev = [
 
 [project.dependency-groups]
 dev = [
+    "nb-cli",
     "pyright",
     "ruff",
 ]
@@ -34,7 +36,7 @@ nonebot-adapter-onebot = [
 "@local" = []
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.format]
 line-ending = "lf"
@@ -94,6 +96,7 @@ ignore = [
     "ANN401",  # any-type
     "COM812",  # missing-trailing-comma
     "PLC0415", # import-outside-top-level
+    "E501",    # line-too-long — CJK characters count as double-width
 ]
 allowed-confusables = ["，", "。", "“", "”", "：", "；", "？", "！", "【", "】", "《", "》", "…", "—", "（", "）", "、"]
 
@@ -102,6 +105,6 @@ keep-runtime-typing = true
 
 [tool.pyright]
 # For Pylance/Pyright configurations, see https://microsoft.github.io/pyright/#/configuration.
-pythonVersion = "3.9"
+pythonVersion = "3.10"
 pythonPlatform = "All"
 typeCheckingMode = "standard"

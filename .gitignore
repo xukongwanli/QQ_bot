@@ -1,0 +1,16 @@
+# Environment files with secrets
+.env
+.env.*
+!.env.example
+
+# API key files
+*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# macOS
+.DS_Store

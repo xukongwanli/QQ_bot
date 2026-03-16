@@ -1,66 +1,98 @@
-from nonebot import on_message
-from nonebot.adapters.onebot.v11 import Bot, PrivateMessageEvent, GroupMessageEvent, Message
+from nonebot import get_plugin_config, logger, on_message
+from nonebot.adapters.onebot.v11 import (
+    GroupMessageEvent,
+    Message,
+    PrivateMessageEvent,
+)
 from nonebot.rule import to_me
-from nonebot.params import CommandArg
 from openai import AsyncOpenAI
-import os
-from dotenv import load_dotenv
+from pydantic import BaseModel
 
 
-# 加载环境变量
+class Config(BaseModel):
+    openai_api_key: str
+    openai_model: str = "gpt-4o-mini"
 
-load_dotenv()
-API_KEY = os.getenv("DEEPSEEK_API_KEY")
-MODEL_NAME = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
-# 初始化 OpenAI 客户端 (DeepSeek 兼容)
-client = AsyncOpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
+plugin_config = get_plugin_config(Config)
+
+client = AsyncOpenAI(api_key=plugin_config.openai_api_key)
 
 # 1. 处理私聊消息 (只要是私聊就回复)
-# rule=None 表示所有私聊都触发，你也可以加条件
-private_chat = on_message(priority=10, block=True, rule=lambda event: isinstance(event, PrivateMessageEvent))
+private_chat = on_message(
+    priority=10,
+    block=True,
+    rule=lambda event: isinstance(event, PrivateMessageEvent),
+)
 
 # 2. 处理群聊消息 (需要 @机器人)
-# rule=to_me() 确保只有被 @ 时才触发
-group_chat = on_message(priority=10, block=True, rule=to_me() & (lambda event: isinstance(event, GroupMessageEvent)))
+group_chat = on_message(
+    priority=10,
+    block=True,
+    rule=to_me() & (lambda event: isinstance(event, GroupMessageEvent)),
+)
 
-async def get_deepseek_response(text: str) -> str:
-    """调用 DeepSeek API 获取回复"""
+
+def _extract_content(message: Message) -> tuple[str, list[str]]:
+    """从消息中提取纯文本和图片 URL 列表。"""
+    text = message.extract_plain_text().strip()
+    images = [
+        seg.data["url"]
+        for seg in message
+        if seg.type == "image" and "url" in seg.data
+    ]
+    return text, images
+
+
+async def get_ai_response(text: str, image_urls: list[str] | None = None) -> str:
+    """调用 OpenAI API 获取回复，支持纯文本与图文混合输入。"""
     try:
+        if image_urls:
+            # 构建多模态消息（文字 + 图片）
+            content: list[dict] = [
+                {"type": "text", "text": text or "请描述这张图片"},
+                *[{"type": "image_url", "image_url": {"url": url}} for url in image_urls],
+            ]
+            user_content: list[dict] | str = content
+        else:
+            user_content = text
+
         response = await client.chat.completions.create(
-            model=MODEL_NAME,
+            model=plugin_config.openai_model,
             messages=[
-                {"role": "system", "content": "你是2.2生日。字榆朴 名如月 号称三界五行中睡懒觉大王 皇家在逃巧克力猫猫公主 曾被称为小月月的 脚踩爱因斯坦 手擒麦克斯韦 在世界金融中心上海潜心修炼机械与人体医学的半步天才兼小说散文家"},
-                {"role": "user", "content": text},
+                {
+                    "role": "system",
+                    "content": (
+                        "你是2.2生日。字榆朴 名如月 号称三界五行中睡懒觉大王 皇家在逃巧克力猫猫公主"
+                        " 曾被称为小月月的 脚踩爱因斯坦 手擒麦克斯韦"
+                        " 在世界金融中心上海潜心修炼机械与人体医学的半步天才兼小说散文家"
+                    ),
+                },
+                {"role": "user", "content": user_content},
             ],
-            stream=False
+            stream=False,
         )
-        result=response.choices[0].message.content
-        print(f"[DeepSeek 回复] {result[:100]}")  # 加这行
-        return result
-    except Exception as e:
-        return f"猪脑过载了,请稍后再试... (错误: {str(e)})"
+        return response.choices[0].message.content or "(无回复)"
+    except Exception as e:  # noqa: BLE001
+        logger.exception(f"OpenAI API error: {e!s}")
+        return f"猪脑过载了,请稍后再试... (错误: {e!s})"
+
 
 @private_chat.handle()
-async def handle_private(event: PrivateMessageEvent):
-    user_msg = event.get_plaintext().strip()
-    if not user_msg:
+async def handle_private(event: PrivateMessageEvent) -> None:
+    text, images = _extract_content(event.get_message())
+    if not text and not images:
         return
-    
-    # 发送“正在输入”提示（可选）
-    # await private_chat.send("思考中...") 
-    
-    reply = await get_deepseek_response(user_msg)
+
+    reply = await get_ai_response(text, images)
     await private_chat.finish(reply)
 
+
 @group_chat.handle()
-async def handle_group(bot: Bot, event: GroupMessageEvent):
-    # 获取纯文本内容（会自动去除 @ 部分）
-    user_msg = event.get_plaintext().strip()
-    
-    if not user_msg:
+async def handle_group(event: GroupMessageEvent) -> None:
+    text, images = _extract_content(event.get_message())
+    if not text and not images:
         return
 
-    reply = await get_deepseek_response(user_msg)
-    # finish 会自动回复，在群里通常是直接发消息，如果需要 @回去，可以使用 MessageSegment
-    await group_chat.finish(reply, at_sender=True) 
+    reply = await get_ai_response(text, images)
+    await group_chat.finish(reply, at_sender=True)
