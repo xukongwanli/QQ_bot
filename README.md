@@ -1,5 +1,7 @@
 # QQ Bot 666
 
+**Language: English | [中文](README.zh-CN.md)**
+
 An AI-powered QQ chatbot built with **NoneBot2** + **OneBot V11** adapter, using the **OpenAI-compatible API** (e.g. DeepSeek) for generating responses. Connects to the QQ account via a **Docker NapCat** framework.
 
 ## Features
